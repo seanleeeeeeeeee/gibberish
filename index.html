@@ -33,7 +33,7 @@
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 13px;
-    width: 180px;
+    width: 220px;
     outline: none;
   }
   #controls input:focus { border-color: #888; }
@@ -53,6 +53,7 @@
     font-size: 12px;
     color: #888;
     margin-left: 4px;
+    max-width: 280px;
   }
   #legend {
     position: fixed;
@@ -66,7 +67,9 @@
     border: 1px solid #333;
     font-size: 12px;
     max-width: 200px;
+    display: none;
   }
+  #legend.visible { display: block; }
   #legend h4 {
     margin: 0 0 8px 0;
     font-size: 11px;
@@ -101,7 +104,7 @@
   .label {
     position: absolute;
     transform: translate(-50%, -50%);
-    font-size: 7px;
+    font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
     pointer-events: auto;
@@ -116,12 +119,63 @@
   }
   .label.seed {
     font-weight: 700;
-    font-size: 11px;
+    font-size: 16px;
+  }
+  #welcome {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    pointer-events: none;
+  }
+  #welcome.hidden { display: none; }
+  #welcome .card {
+    background: rgba(20,20,25,0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid #333;
+    border-radius: 14px;
+    padding: 32px 40px;
+    text-align: center;
+    pointer-events: auto;
+    max-width: 480px;
+  }
+  #welcome h1 {
+    margin: 0 0 8px 0;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  #welcome p {
+    margin: 6px 0;
+    color: #aaa;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  #welcome .examples {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  #welcome .examples button {
+    background: #1a1a20;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #welcome .examples button:hover {
+    background: #2a2a30;
+    border-color: #666;
   }
   #loading {
     position: fixed;
     inset: 0;
-    background: #0f0f12;
+    background: rgba(15,15,18,0.9);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -147,7 +201,7 @@
 <body>
 
 <div id="controls">
-  <input id="seed" type="text" value="stereolab" placeholder="artist name..." />
+  <input id="seed" type="text" placeholder="Enter an artist (e.g. Radiohead)…" />
   <button id="go">Load</button>
   <span id="status"></span>
 </div>
@@ -162,7 +216,22 @@
   <div id="labels"></div>
 </div>
 
-<div id="loading">
+<div id="welcome">
+  <div class="card">
+    <h1>🎵 Music Map</h1>
+    <p>Type any artist name above to generate a genre-colored similarity map.</p>
+    <p style="font-size:11px;color:#666">Data scraped from music-map.com · regions auto-clustered from similarity graph</p>
+    <div class="examples">
+      <button data-artist="Radiohead">Radiohead</button>
+      <button data-artist="Stereolab">Stereolab</button>
+      <button data-artist="Aphex Twin">Aphex Twin</button>
+      <button data-artist="Miles Davis">Miles Davis</button>
+      <button data-artist="Fleetwood Mac">Fleetwood Mac</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="hidden">
   <div class="spinner"></div>
   <div id="loading-text">Loading…</div>
 </div>
@@ -171,7 +240,11 @@
 // ============================================================
 // CONFIG
 // ============================================================
-const PROXY = 'https://corsproxy.io/?';
+const PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+];
 const W = 1400, H = 900;
 const PAD = 60;
 
@@ -179,29 +252,45 @@ const PAD = 60;
 // FETCH & PARSE
 // ============================================================
 async function loadMap(seed) {
-  const slug = seed.toLowerCase().trim().replace(/\s+/g, '-');
+  const slug = seed.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+  if (!slug) throw new Error('Please enter an artist name.');
   const target = `https://www.music-map.com/${slug}`;
-  const url = PROXY + encodeURIComponent(target);
 
-  setStatus('Fetching music-map.com…');
-  const html = await fetch(url).then(r => {
-    if (!r.ok) throw new Error('Fetch failed: ' + r.status);
-    return r.text();
-  });
+  let html = null;
+  let lastErr = null;
+  for (let i = 0; i < PROXIES.length; i++) {
+    try {
+      setStatus(`Fetching via proxy ${i+1}/${PROXIES.length}…`);
+      const url = PROXIES[i](target);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      html = await res.text();
+      if (html && html.length > 500) break;
+      throw new Error('Empty response');
+    } catch (e) {
+      lastErr = e;
+      console.warn(`Proxy ${i+1} failed:`, e.message);
+    }
+  }
+  if (!html) throw new Error('All proxies failed. ' + (lastErr?.message || ''));
 
-  // Artist names from <a class=S id=sN>Name</a>
+  // Artist names
   const nameMatches = [...html.matchAll(/<a[^>]*\bid=s(\d+)\b[^>]*>([^<]+)<\/a>/g)];
-  if (nameMatches.length === 0) throw new Error('No artists found — artist may not exist on Music-Map.');
+  if (nameMatches.length === 0) {
+    throw new Error(`No artists found for "${seed}". Try a different spelling or a more popular artist.`);
+  }
 
   const names = [];
   nameMatches.forEach(m => { names[+m[1]] = decodeHtml(m[2].trim()); });
 
-  // Aid similarity matrix
+  // Aid matrix
   const aidMatches = [...html.matchAll(/Aid\[(\d+)\]\s*=\s*new Array\(([^)]+)\)/g)];
   const Aid = [];
   aidMatches.forEach(m => {
     Aid[+m[1]] = m[2].split(',').map(Number);
   });
+
+  if (Aid.length === 0) throw new Error('Could not parse similarity data.');
 
   // Popularity
   const popMatch = html.match(/window\.Pop\s*=\s*new Array\(([^)]+)\)/);
@@ -219,15 +308,13 @@ function decodeHtml(s) {
 // ============================================================
 // FORCE-DIRECTED LAYOUT
 // ============================================================
-function layout(Aid, names, Pop) {
+function layout(Aid, names) {
   const N = names.length;
   const pos = names.map((_, i) => {
     const angle = (i / N) * Math.PI * 2;
     const r = 200 + Math.random() * 100;
     return { x: W/2 + Math.cos(angle)*r, y: H/2 + Math.sin(angle)*r };
   });
-
-  // Pin seed at center
   pos[0] = { x: W/2, y: H/2 };
 
   const ITERS = 500;
@@ -244,12 +331,10 @@ function layout(Aid, names, Pop) {
         const ux = dx/d, uy = dy/d;
         const a = Aid[i] ? Aid[i][j] : -1;
 
-        // Repulsion
         const rep = 3500 / (d*d);
         force[i].x -= ux*rep; force[i].y -= uy*rep;
         force[j].x += ux*rep; force[j].y += uy*rep;
 
-        // Attraction (spring) if related
         if (a > 0) {
           const target = 240 / (1 + Math.log(1 + a));
           const k = 0.04 * Math.min(a, 6);
@@ -258,14 +343,13 @@ function layout(Aid, names, Pop) {
           force[j].x -= ux*spring; force[j].y -= uy*spring;
         }
       }
-      // Gentle pull toward center
       const cx = W/2, cy = H/2;
       force[i].x += (cx - pos[i].x) * 0.0008;
       force[i].y += (cy - pos[i].y) * 0.0008;
     }
 
     for (let i = 0; i < N; i++) {
-      if (i === 0) continue; // seed pinned
+      if (i === 0) continue;
       const max = 20;
       let fx = force[i].x * alpha;
       let fy = force[i].y * alpha;
@@ -279,7 +363,7 @@ function layout(Aid, names, Pop) {
 }
 
 // ============================================================
-// COMMUNITY DETECTION (label propagation)
+// COMMUNITY DETECTION
 // ============================================================
 function detectCommunities(Aid, N) {
   let labels = Array.from({length: N}, (_, i) => i);
@@ -303,7 +387,6 @@ function detectCommunities(Aid, N) {
     }
     if (!changed) break;
   }
-  // Renumber to 0,1,2,...
   const map = {};
   let next = 0;
   return labels.map(l => {
@@ -321,7 +404,7 @@ function shuffle(a) {
 }
 
 // ============================================================
-// COLOR ASSIGNMENT
+// COLORS
 // ============================================================
 function buildPalette(communities) {
   const unique = [...new Set(communities)];
@@ -345,18 +428,17 @@ function hslToRgb(h, s, l) {
 }
 
 // ============================================================
-// PAINT GRADIENT FIELD (regions)
+// PAINT FIELD
 // ============================================================
 function paintField(ctx, pos, rgbs, w, h) {
-  const STEP = 4;       // pixel block size — smaller = sharper, slower
-  const K = 5;          // nearest neighbors to blend
-  const SIGMA2 = 14000; // falloff
+  const STEP = 4;
+  const K = 5;
+  const SIGMA2 = 14000;
   const img = ctx.createImageData(w, h);
   const data = img.data;
 
   for (let y = 0; y < h; y += STEP) {
     for (let x = 0; x < w; x += STEP) {
-      // K nearest
       const ds = [];
       for (let i = 0; i < pos.length; i++) {
         const dx = pos[i].x - x, dy = pos[i].y - y;
@@ -373,7 +455,6 @@ function paintField(ctx, pos, rgbs, w, h) {
       }
       r /= wsum; g /= wsum; b /= wsum;
 
-      // Fill STEP x STEP block
       for (let dy = 0; dy < STEP && y+dy < h; dy++) {
         for (let dx = 0; dx < STEP && x+dx < w; dx++) {
           const idx = ((y+dy)*w + (x+dx)) * 4;
@@ -389,7 +470,7 @@ function paintField(ctx, pos, rgbs, w, h) {
 }
 
 // ============================================================
-// RENDER LABELS
+// LABELS & LEGEND
 // ============================================================
 function renderLabels(names, pos, communities, palette, Pop) {
   const container = document.getElementById('labels');
@@ -403,15 +484,11 @@ function renderLabels(names, pos, communities, palette, Pop) {
     el.style.left = pos[i].x + 'px';
     el.style.top  = pos[i].y + 'px';
     const c = palette[communities[i]];
-    // Lighten for readability on tinted background
     el.style.color = i === 0 ? '#fff' : lighten(c.hsl, 25);
     const sizeBoost = Pop[i] ? Math.log10(1 + Pop[i]) / Math.log10(1 + maxPop) : 0.5;
-    if (i !== 0) el.style.fontSize = (5 + sizeBoost * 5) + 'px';
+    if (i !== 0) el.style.fontSize = (10 + sizeBoost * 5) + 'px';
     el.title = name + '  (cluster ' + communities[i] + ')';
-    el.addEventListener('click', () => {
-      document.getElementById('seed').value = name;
-      run(name);
-    });
+    el.addEventListener('click', () => navigate(name));
     container.appendChild(el);
   });
 }
@@ -422,17 +499,14 @@ function lighten(hsl, byL) {
   return `hsl(${m[1]}, ${m[2]}%, ${Math.min(90, +m[3] + byL)}%)`;
 }
 
-// ============================================================
-// LEGEND
-// ============================================================
 function renderLegend(communities, palette, names) {
+  const legend = document.getElementById('legend');
   const container = document.getElementById('legend-items');
   container.innerHTML = '';
   const groups = {};
   communities.forEach((c, i) => {
     (groups[c] = groups[c] || []).push(names[i]);
   });
-  // Sort clusters by size
   const sorted = Object.entries(groups).sort((a,b) => b[1].length - a[1].length);
   sorted.forEach(([c, members]) => {
     const item = document.createElement('div');
@@ -443,6 +517,7 @@ function renderLegend(communities, palette, names) {
     `;
     container.appendChild(item);
   });
+  legend.classList.add('visible');
 }
 
 // ============================================================
@@ -488,7 +563,6 @@ function setupPanZoom() {
     apply();
   }, { passive: false });
 
-  // Center initially
   function center() {
     const rect = stage.getBoundingClientRect();
     tx = (rect.width  - W) / 2;
@@ -500,30 +574,43 @@ function setupPanZoom() {
 }
 
 // ============================================================
-// STATUS
+// STATUS / UI
 // ============================================================
 function setStatus(msg) {
   document.getElementById('status').textContent = msg || '';
   document.getElementById('loading-text').textContent = msg || 'Loading…';
 }
-
 function showLoading(show) {
   document.getElementById('loading').classList.toggle('hidden', !show);
+}
+function showWelcome(show) {
+  document.getElementById('welcome').classList.toggle('hidden', !show);
 }
 
 // ============================================================
 // MAIN
 // ============================================================
+let currentArtist = null;
+
 async function run(seed) {
+  if (!seed || !seed.trim()) {
+    showWelcome(true);
+    return;
+  }
   const btn = document.getElementById('go');
   btn.disabled = true;
+  showWelcome(false);
   showLoading(true);
+  currentArtist = seed;
+  document.getElementById('seed').value = seed;
+  document.title = `Music Map — ${seed}`;
+
   try {
     const { names, Aid, Pop } = await loadMap(seed);
     setStatus(`Computing layout for ${names.length} artists…`);
-    await new Promise(r => setTimeout(r, 30)); // let UI breathe
+    await new Promise(r => setTimeout(r, 30));
 
-    const pos = layout(Aid, names, Pop);
+    const pos = layout(Aid, names);
     setStatus('Detecting clusters…');
     await new Promise(r => setTimeout(r, 30));
 
@@ -543,22 +630,58 @@ async function run(seed) {
     setStatus(`${names.length} artists, ${new Set(communities).size} clusters`);
   } catch (err) {
     console.error(err);
-    setStatus('Error: ' + err.message);
+    setStatus('⚠️ ' + err.message);
+    showWelcome(true);
   } finally {
     btn.disabled = false;
     showLoading(false);
   }
 }
 
+function navigate(artist) {
+  const hash = encodeURIComponent(artist.trim());
+  if (decodeURIComponent(location.hash.slice(1)) === artist.trim()) {
+    run(artist);   // same hash — just rerun
+  } else {
+    location.hash = hash;  // triggers hashchange → run
+  }
+}
+
+function readHash() {
+  const h = decodeURIComponent(location.hash.slice(1)).trim();
+  return h || null;
+}
+
+// Event bindings
 document.getElementById('go').addEventListener('click', () => {
-  run(document.getElementById('seed').value);
+  const val = document.getElementById('seed').value.trim();
+  if (val) navigate(val);
 });
 document.getElementById('seed').addEventListener('keydown', e => {
-  if (e.key === 'Enter') run(e.target.value);
+  if (e.key === 'Enter') {
+    const val = e.target.value.trim();
+    if (val) navigate(val);
+  }
+});
+document.querySelectorAll('#welcome .examples button').forEach(btn => {
+  btn.addEventListener('click', () => navigate(btn.dataset.artist));
+});
+window.addEventListener('hashchange', () => {
+  const a = readHash();
+  if (a) run(a);
+  else { showWelcome(true); currentArtist = null; }
 });
 
 setupPanZoom();
-run('stereolab');
+
+// Boot — only load if URL has #artist, otherwise show welcome
+const initial = readHash();
+if (initial) {
+  run(initial);
+} else {
+  showWelcome(true);
+  document.getElementById('seed').focus();
+}
 </script>
 
 </body>
