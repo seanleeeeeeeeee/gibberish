@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MoodGraph — Music Discovery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --accent:   #6c63ff;
+      --accent2:  #a855f7;
+      --bg:       #07070e;
+      --surface:  #10101c;
+      --surface2: #181828;
+      --text:     #e0e0f0;
+      --text2:    #7878aa;
+      --border:   rgba(255,255,255,0.08);
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(circle at 15% 40%, rgba(108,99,255,.07) 0%, transparent 50%),
+        radial-gradient(circle at 85% 15%, rgba(168,85,247,.06) 0%, transparent 45%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+
+    /* ── Header ── */
+    header {
+      padding: 22px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-icon { font-size: 26px; }
+    .logo {
+      font-size: 24px; font-weight: 700; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .tagline { margin-left: auto; font-size: 12px; color: var(--text2); }
+
+    /* ── Input ── */
+    .input-section { padding: 22px 0 16px; }
+
+    .search-row { display: flex; gap: 10px; max-width: 580px; margin-bottom: 14px; }
+
+    .search-input {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 13px 18px; font-size: 15px; color: var(--text);
+      outline: none; transition: border .2s, box-shadow .2s; font-family: inherit;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(108,99,255,.15);
+    }
+    .search-input::placeholder { color: var(--text2); }
+
+    .gen-btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: 12px; padding: 13px 26px;
+      font-size: 14px; font-weight: 600; color: #fff; cursor: pointer;
+      transition: transform .15s, box-shadow .15s; white-space: nowrap;
+      font-family: inherit;
+    }
+    .gen-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(108,99,255,.4); }
+    .gen-btn:active { transform: none; }
+    .gen-btn.busy { opacity: .65; pointer-events: none; }
+
+    .mood-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      padding: 7px 14px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text2); font-size: 12px; cursor: pointer;
+      transition: all .15s; font-family: inherit;
+    }
+    .chip:hover, .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── Layout ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 370px;
+      gap: 18px;
+      padding-bottom: 40px;
+    }
+    @media(max-width:900px){ .grid { grid-template-columns:1fr; } }
+
+    /* ── Panels ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+    }
+    .panel-label {
+      font-size: 11px; font-weight: 600; letter-spacing: .6px;
+      text-transform: uppercase; color: var(--text2);
+    }
+    .panel-meta { font-size: 11px; color: var(--text2); }
+
+    /* ── Graph ── */
+    .graph-wrap { position: relative; }
+    #graphCanvas { display: block; width: 100%; }
+
+    .graph-empty {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; color: var(--text2);
+    }
+    .graph-empty .icon { font-size: 40px; }
+    .graph-empty .title { font-size: 14px; }
+    .graph-empty .sub { font-size: 12px; max-width: 260px; text-align: center; line-height: 1.5; }
+
+    .graph-legend {
+      display: none; gap: 18px; padding: 10px 16px;
+      border-top: 1px solid var(--border); font-size: 11px; color: var(--text2);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .ldot { width: 9px; height: 9px; border-radius: 50%; }
+
+    /* ── Sidebar ── */
+    .sidebar { display: flex; flex-direction: column; gap: 14px; }
+
+    /* Vibe card */
+    .vibe-card {
+      display: none;
+      background: linear-gradient(135deg, rgba(108,99,255,.12), rgba(168,85,247,.08));
+      border: 1px solid rgba(108,99,255,.3);
+      border-radius: 16px; padding: 14px 16px;
+    }
+    .vibe-label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+    .vibe-text { font-size: 13px; line-height: 1.65; color: var(--text); }
+
+    /* Now playing */
+    .now-playing { border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); }
+    .np-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+    .np-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display:none; animation: blink 1.4s infinite; }
+    @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.75)} }
+    .np-label { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+
+    .yt-wrap { position: relative; padding-top: 56.25%; background: #000; }
+    .yt-wrap iframe, .yt-wrap #ytPlayer {
+      position:absolute; inset:0; width:100%; height:100%; border:none;
+    }
+
+    /* Empty / error overlays */
+    .video-overlay {
+      padding: 32px 18px; text-align: center; color: var(--text2); font-size: 13px;
+      background: var(--surface);
+    }
+    .video-overlay .nv-icon { font-size: 36px; margin-bottom: 8px; }
+    .video-overlay .nv-title { color: var(--text); font-size: 13px; margin-bottom: 6px; font-weight: 500; }
+    .video-overlay .nv-sub { font-size: 12px; line-height: 1.5; margin-bottom: 12px; }
+    .video-overlay .yt-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #ff0000; color: #fff; padding: 8px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600; text-decoration: none;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .video-overlay .yt-link:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(255,0,0,.35); }
+    .video-overlay .skip-link {
+      display: inline-block; margin-left: 8px;
+      color: var(--accent); font-size: 12px; cursor: pointer;
+      background: none; border: none; font-family: inherit;
+    }
+    .video-overlay .skip-link:hover { text-decoration: underline; }
+
+    /* Unmute prompt */
+    .unmute-banner {
+      display: none;
+      position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+      background: rgba(0,0,0,.85); color: #fff;
+      padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      cursor: pointer; z-index: 10; border: 1px solid rgba(255,255,255,.18);
+      backdrop-filter: blur(6px);
+    }
+    .unmute-banner.on { display: block; }
+    .unmute-banner:hover { background: rgba(0,0,0,1); }
+
+    .np-meta { padding: 10px 14px; border-top: 1px solid var(--border); display:none; }
+    .np-song { font-size: 13px; font-weight: 600; }
+    .np-artist { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+    /* Track list */
+    .track-list { border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); flex: 1; }
+    .tl-empty { padding: 28px 16px; text-align: center; color: var(--text2); font-size: 12px; }
+
+    .track {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px; cursor: pointer; transition: background .12s;
+      border-bottom: 1px solid rgba(255,255,255,.03);
+    }
+    .track:hover { background: rgba(255,255,255,.04); }
+    .track.active { background: rgba(108,99,255,.1); }
+    .track.broken { opacity: .45; }
+    .track-num { font-size: 11px; color: var(--text2); width: 18px; text-align:center; flex-shrink:0; }
+    .track-info { flex: 1; min-width: 0; }
+    .track-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-sub { font-size: 11px; color: var(--text2); margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+    .hop-badge {
+      font-size: 9px; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: .2px;
+    }
+    .hop-0 { background:rgba(255,107,107,.2); color:#ff6b6b; }
+    .hop-1 { background:rgba(78,205,196,.2);  color:#4ecdc4; }
+    .hop-2 { background:rgba(168,230,207,.2); color:#a8e6cf; }
+
+    .play-btn {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+      border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .12s; flex-shrink: 0; font-size: 9px; color: #fff;
+    }
+    .track:hover .play-btn, .track.active .play-btn { opacity: 1; }
+
+    /* Loading bar */
+    .loading-bar {
+      height: 2px; border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent));
+      background-size: 200% 100%;
+      animation: shimmer 1.2s linear infinite;
+      display: none;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .loading-bar.on { display: block; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 11px 18px; font-size: 13px;
+      z-index: 999; transform: translateY(70px); opacity: 0;
+      transition: all .3s ease;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="logo-icon">🎵</span>
+    <span class="logo">MoodGraph</span>
+    <span class="tagline">Graph-based music discovery</span>
+  </header>
+
+  <div class="input-section">
+    <div class="search-row">
+      <input id="searchInput" class="search-input"
+        placeholder="Enter artist (e.g. Drake, Billie Eilish) or mood…"
+        autocomplete="off" />
+      <button class="gen-btn" id="genBtn" onclick="generate()">Generate Playlist ✨</button>
+    </div>
+    <div class="mood-chips">
+      <span class="chip" onclick="quickMood('chill',this)">😌 Chill</span>
+      <span class="chip" onclick="quickMood('hype',this)">🔥 Hype</span>
+      <span class="chip" onclick="quickMood('sad',this)">💙 Sad</span>
+      <span class="chip" onclick="quickMood('focus',this)">🧠 Focus</span>
+      <span class="chip" onclick="quickMood('romantic',this)">💗 Romantic</span>
+      <span class="chip" onclick="quickMood('late night',this)">🌙 Late Night</span>
+    </div>
+  </div>
+
+  <div class="loading-bar" id="loadingBar"></div>
+
+  <div class="grid">
+
+    <!-- Graph Panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-label">🕸 Music Graph</span>
+        <span class="panel-meta" id="graphMeta">Enter an artist or mood to explore</span>
+      </div>
+      <div class="graph-wrap">
+        <canvas id="graphCanvas" height="470"></canvas>
+        <div class="graph-empty" id="graphEmpty">
+          <div class="icon">🎸</div>
+          <div class="title">Your music map will appear here</div>
+          <div class="sub">We traverse the artist similarity graph using BFS to build your playlist</div>
+        </div>
+      </div>
+      <div class="graph-legend" id="graphLegend">
+        <div class="legend-item"><div class="ldot" style="background:#ff6b6b"></div>Seed (hop 0)</div>
+        <div class="legend-item"><div class="ldot" style="background:#4ecdc4"></div>Direct links (hop 1)</div>
+        <div class="legend-item"><div class="ldot" style="background:#a8e6cf"></div>Extended (hop 2)</div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Vibe -->
+      <div class="vibe-card" id="vibeCard">
+        <div class="vibe-label">✨ AI Vibe Analysis</div>
+        <div class="vibe-text" id="vibeText"></div>
+      </div>
+
+      <!-- Now Playing -->
+      <div class="now-playing">
+        <div class="np-head">
+          <div class="np-dot" id="npDot"></div>
+          <span class="np-label">▶ Now Playing</span>
+        </div>
+        <div id="videoBox">
+          <div class="video-overlay">
+            <div class="nv-icon">🎵</div>
+            <div class="nv-title">Ready when you are</div>
+            <div class="nv-sub">Generate a playlist or pick a track to start playing.</div>
+          </div>
+        </div>
+        <div class="np-meta" id="npMeta">
+          <div class="np-song" id="npSong"></div>
+          <div class="np-artist" id="npArtist"></div>
+        </div>
+      </div>
+
+      <!-- Track List -->
+      <div class="track-list">
+        <div class="panel-head">
+          <span class="panel-label">📋 Playlist</span>
+          <span class="panel-meta" id="trackCount"></span>
+        </div>
+        <div id="trackList">
+          <div class="tl-empty">Generate a playlist to get started</div>
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+  </div><!-- /grid -->
+</div><!-- /wrap -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   DATA LAYER
+   NOTE: video IDs swapped to lyric / official-audio / Topic uploads
+   which are far more reliably embeddable than VEVO music videos.
+═══════════════════════════════════════════ */
+
+const GRAPH = {
+  "Drake":            ["The Weeknd","Future","Travis Scott","J. Cole","Lil Baby","Nicki Minaj"],
+  "The Weeknd":       ["Drake","SZA","Daft Punk","Post Malone","Ariana Grande"],
+  "SZA":              ["The Weeknd","Kendrick Lamar","Frank Ocean","Jhené Aiko","H.E.R."],
+  "Travis Scott":     ["Drake","Future","Kanye West","Kid Cudi","Don Toliver"],
+  "Future":           ["Drake","Travis Scott","Lil Baby","Gunna","Metro Boomin"],
+  "J. Cole":          ["Kendrick Lamar","Drake","Logic","Big Sean","Dreamville"],
+  "Kendrick Lamar":   ["J. Cole","SZA","Jay-Z","Drake","Isaiah Rashad"],
+  "Frank Ocean":      ["SZA","Childish Gambino","Tyler the Creator","James Blake"],
+  "Billie Eilish":    ["Lana Del Rey","Halsey","Olivia Rodrigo","Lorde","Clairo"],
+  "Lana Del Rey":     ["Billie Eilish","Lorde","Halsey","Angel Olsen","Mazzy Star"],
+  "Halsey":           ["Billie Eilish","Lorde","Melanie Martinez","Paramore"],
+  "Olivia Rodrigo":   ["Billie Eilish","Taylor Swift","Paramore","Gracie Abrams"],
+  "Taylor Swift":     ["Olivia Rodrigo","Ed Sheeran","Ariana Grande","Katy Perry","Sabrina Carpenter"],
+  "Ed Sheeran":       ["Taylor Swift","Justin Bieber","Charlie Puth","Bruno Mars"],
+  "Ariana Grande":    ["The Weeknd","Justin Bieber","Nicki Minaj","Taylor Swift"],
+  "Post Malone":      ["The Weeknd","Justin Bieber","Lil Uzi Vert","21 Savage"],
+  "Daft Punk":        ["The Weeknd","Pharrell Williams","Justice","LCD Soundsystem"],
+  "Childish Gambino": ["Frank Ocean","Tyler the Creator","Chance the Rapper","Janelle Monáe"],
+  "Tyler the Creator":["Childish Gambino","Frank Ocean","Earl Sweatshirt","Vince Staples"],
+  "Kanye West":       ["Travis Scott","Jay-Z","Kid Cudi","Pusha T"],
+  "Jay-Z":            ["Kanye West","Beyoncé","Kendrick Lamar","Nas"],
+  "Beyoncé":          ["Jay-Z","Rihanna","Lizzo","SZA"],
+  "Rihanna":          ["Beyoncé","Drake","Calvin Harris","Nicki Minaj"],
+  "Bruno Mars":       ["Ed Sheeran","Cardi B","Adele","Justin Timberlake"],
+  "Adele":            ["Sam Smith","Amy Winehouse","Ed Sheeran","Lana Del Rey"],
+  "Sam Smith":        ["Adele","Ed Sheeran","Khalid","James Blake"],
+  "Justin Bieber":    ["Ed Sheeran","Ariana Grande","Post Malone","Shawn Mendes"],
+  "Lorde":            ["Billie Eilish","Lana Del Rey","Halsey","Grimes"],
+  "Pharrell Williams":["Daft Punk","Bruno Mars","Justin Timberlake"],
+  "Cardi B":          ["Bruno Mars","Nicki Minaj","Lizzo"],
+  "Lil Baby":         ["Drake","Future","Gunna","42 Dugg"],
+  "Gunna":            ["Lil Baby","Future","Travis Scott","Young Thug"],
+  "Jhené Aiko":       ["SZA","H.E.R.","Kehlani","6LACK"],
+  "Kid Cudi":         ["Travis Scott","Kanye West","Childish Gambino","MGK"],
+  "Chance the Rapper":["Childish Gambino","J. Cole","Lil Uzi Vert","Vic Mensa"],
+  "Logic":            ["J. Cole","Chance the Rapper","Big Sean","Wale"],
+  "Nicki Minaj":      ["Ariana Grande","Cardi B","Drake","Lil Wayne"],
+  "Charlie Puth":     ["Ed Sheeran","Justin Bieber","Bruno Mars","Shawn Mendes"],
+  "Khalid":           ["Sam Smith","Billie Eilish","H.E.R.","Clairo"],
+  "H.E.R.":           ["Jhené Aiko","Khalid","SZA","Kehlani"],
+};
+
+const MOOD_MAP = {
+  "chill":       ["The Weeknd","Frank Ocean","Jhené Aiko"],
+  "hype":        ["Drake","Travis Scott","Future"],
+  "sad":         ["Adele","Lana Del Rey","Sam Smith"],
+  "focus":       ["Daft Punk","Tyler the Creator","Childish Gambino"],
+  "romantic":    ["Ed Sheeran","Bruno Mars","Ariana Grande"],
+  "late night":  ["The Weeknd","SZA","Frank Ocean"],
+  "lofi":        ["Frank Ocean","Childish Gambino","Khalid"],
+  "r&b":         ["SZA","Frank Ocean","Jhené Aiko"],
+  "rap":         ["Drake","Kendrick Lamar","J. Cole"],
+  "pop":         ["Taylor Swift","Ariana Grande","Ed Sheeran"],
+  "sad boi":     ["Lana Del Rey","Billie Eilish","Sam Smith"],
+};
+
+const SONGS = {
+  "Drake":            { title:"God's Plan",          id:"xpVfcZ0ZcFM" },
+  "The Weeknd":       { title:"Blinding Lights",     id:"4NRXx6U8ABQ" },
+  "SZA":              { title:"Kill Bill",            id:"OE8x8VbXEvA" },
+  "Travis Scott":     { title:"SICKO MODE",           id:"6ONRf7h3Mdk" },
+  "Future":           { title:"Mask Off",             id:"xvZqHgFz51I" },
+  "J. Cole":          { title:"No Role Modelz",       id:"4HO9-RBsGKA" },
+  "Kendrick Lamar":   { title:"HUMBLE.",              id:"tvTRZJ-4EyI" },
+  "Frank Ocean":      { title:"Nights",               id:"1YUaZ9kSAFc" },
+  "Billie Eilish":    { title:"bad guy",              id:"DyDfgMOUjCI" },
+  "Lana Del Rey":     { title:"Summertime Sadness",   id:"TdrL3QxjA1g" },
+  "Halsey":           { title:"Without Me",           id:"ZAfAud_M_mg" },
+  "Olivia Rodrigo":   { title:"drivers license",      id:"ZmDBbnmKpqQ" },
+  "Taylor Swift":     { title:"Shake It Off",         id:"nfWlot6h_JM" },
+  "Ed Sheeran":       { title:"Shape of You",         id:"JGwWNGJdvx8" },
+  "Ariana Grande":    { title:"thank u, next",        id:"gl1aHhXnN1k" },
+  "Post Malone":      { title:"Circles",              id:"wXhTHyIgQ_U" },
+  "Daft Punk":        { title:"Get Lucky",            id:"5NV6Rdv1h3A" },
+  "Childish Gambino": { title:"Redbone",              id:"Kp7eSUU9oy8" },
+  "Tyler the Creator":{ title:"EARFQUAKE",            id:"B4yHqo6pN60" },
+  "Kanye West":       { title:"POWER",                id:"L53gjP-TtGE" },
+  "Jay-Z":            { title:"Empire State of Mind", id:"KFWN8NbFACQ" },
+  "Beyoncé":          { title:"Crazy in Love",        id:"ViwtNLUqkMY" },
+  "Rihanna":          { title:"We Found Love",        id:"tg00YEETFzg" },
+  "Bruno Mars":       { title:"Uptown Funk",          id:"OPf0YbXqDm0" },
+  "Adele":            { title:"Hello",                id:"YQHsXMglC9A" },
+  "Sam Smith":        { title:"Stay With Me",         id:"pB-5XG-DbAA" },
+  "Justin Bieber":    { title:"Sorry",                id:"fRh_vgS2dFE" },
+  "Lorde":            { title:"Royals",               id:"nlcIKh6sBtc" },
+  "Pharrell Williams":{ title:"Happy",                id:"y6Sxv-sUYtM" },
+  "Cardi B":          { title:"WAP",                  id:"hsm4poTWjMs" },
+  "Lil Baby":         { title:"Drip Too Hard",        id:"IDd8dHAFG2E" },
+  "Gunna":            { title:"Pushin P",             id:"Cvo6Gx6kkNM" },
+  "Jhené Aiko":       { title:"Sativa",               id:"WkEzNQGEn5g" },
+  "Kid Cudi":         { title:"Pursuit of Happiness", id:"acGCKGJUFLo" },
+  "Chance the Rapper":{ title:"No Problem",           id:"PCRgHbwbSCg" },
+  "Logic":            { title:"1-800-273-8255",       id:"Kb24RrHIbFk" },
+  "Nicki Minaj":      { title:"Super Bass",           id:"4JipHEz53sU" },
+  "Charlie Puth":     { title:"Attention",            id:"nfs8NYg7yQM" },
+  "Khalid":           { title:"Talk",                 id:"OFwk-Omf1Lo" },
+  "H.E.R.":           { title:"Best Part",            id:"P_OLhKFauhw" },
+};
+
+const VIBES = {
+  "chill":      "This playlist weaves atmospheric R&B and ambient textures, creating a smooth introspective experience perfect for unwinding.",
+  "hype":       "A high-energy cluster of trap, hip-hop, and club-ready bangers built for peak moments and adrenaline rushes.",
+  "sad":        "Tender vocals and melancholic arrangements define this collection — these artists share an emotional depth that makes heartbreak feel universal.",
+  "focus":      "Hypnotic grooves and cerebral soundscapes create a flow state. The music propels without demanding attention.",
+  "romantic":   "Warm production and heartfelt lyricism flow through — from silky R&B to contemporary pop, the mood is unmistakably intimate.",
+  "late night": "Dark atmospherics and introspective lyricism define this nocturnal cluster. These artists share a signature late-night energy.",
+  "lofi":       "Dusty samples and mellow beats — the perfect companion for quiet evenings and reflective thought.",
+  "r&b":        "Silky vocals, lush production, and emotional authenticity — this R&B cluster represents the contemporary sound of modern soul.",
+  "rap":        "Lyricism, flow, and production excellence converge. These artists represent the cutting edge of hip-hop storytelling.",
+  "pop":        "Infectious hooks and polished production define this cluster. These artists have mastered the art of the modern hit.",
+  "default":    "This playlist explores a musical universe through shared production styles, collaborations, and genre affinities — a handcrafted journey through sound.",
+};
+
+/* ═══════════════════════════════════════════
+   BFS ENGINE
+═══════════════════════════════════════════ */
+
+function bfs(seed, maxHops=2, maxNodes=13) {
+  const visited = new Map(); // artist -> hop
+  const edges   = [];
+  const queue   = [{ artist: seed, hop: 0 }];
+
+  while (queue.length && visited.size < maxNodes) {
+    const { artist, hop } = queue.shift();
+    if (visited.has(artist)) continue;
+    visited.set(artist, hop);
+
+    if (hop < maxHops) {
+      for (const nb of (GRAPH[artist] || [])) {
+        if (!visited.has(nb)) {
+          edges.push({ source: artist, target: nb });
+          queue.push({ artist: nb, hop: hop + 1 });
+        }
+      }
+    }
+  }
+  return { visited, edges };
+}
+
+function resolveSeed(raw) {
+  const lower = raw.toLowerCase().trim();
+  for (const [mood, seeds] of Object.entries(MOOD_MAP))
+    if (lower.includes(mood)) return { mood, seed: seeds[0] };
+  for (const a of Object.keys(GRAPH))
+    if (a.toLowerCase() === lower) return { mood: null, seed: a };
+  for (const a of Object.keys(GRAPH))
+    if (a.toLowerCase().includes(lower)) return { mood: null, seed: a };
+  return null;
+}
+
+/* ═══════════════════════════════════════════
+   GRAPH RENDERER (Force-directed canvas)
+═══════════════════════════════════════════ */
+
+const canvas = document.getElementById('graphCanvas');
+const ctx    = canvas.getContext('2d');
+let nodes = [], edges = [], raf = null, frame = 0;
+
+function initCanvas() {
+  canvas.width  = canvas.parentElement.clientWidth;
+  canvas.height = 470;
+}
+
+function buildForceGraph(visited, edgeList) {
+  const W = canvas.width, H = canvas.height;
+  nodes = [...visited.entries()].map(([id, hop]) => ({
+    id, hop,
+    x: W/2 + (Math.random()-.5)*220,
+    y: H/2 + (Math.random()-.5)*220,
+    vx:0, vy:0, fx:0, fy:0,
+  }));
+  edges = edgeList.filter(e => nodes.find(n=>n.id===e.source) && nodes.find(n=>n.id===e.target));
+}
+
+function tick() {
+  const W = canvas.width, H = canvas.height;
+  for (const n of nodes) { n.fx=0; n.fy=0; }
+
+  for (let i=0;i<nodes.length;i++)
+    for (let j=i+1;j<nodes.length;j++) {
+      const a=nodes[i], b=nodes[j];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const d=Math.sqrt(dx*dx+dy*dy)||1;
+      const k=Math.min(9000/(d*d),60);
+      a.fx-=k*dx/d; a.fy-=k*dy/d;
+      b.fx+=k*dx/d; b.fy+=k*dy/d;
+    }
+
+  for (const e of edges) {
+    const a=nodes.find(n=>n.id===e.source), b=nodes.find(n=>n.id===e.target);
+    if(!a||!b) continue;
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const d=Math.sqrt(dx*dx+dy*dy)||1;
+    const spring=(d-150)*0.025;
+    a.fx+=spring*dx/d; a.fy+=spring*dy/d;
+    b.fx-=spring*dx/d; b.fy-=spring*dy/d;
+  }
+
+  for (const n of nodes) {
+    n.fx+=(W/2-n.x)*0.018;
+    n.fy+=(H/2-n.y)*0.018;
+  }
+
+  for (const n of nodes) {
+    n.vx=(n.vx+n.fx)*.82;
+    n.vy=(n.vy+n.fy)*.82;
+    n.x=Math.max(44,Math.min(W-44,n.x+n.vx));
+    n.y=Math.max(34,Math.min(H-34,n.y+n.vy));
+  }
+}
+
+const NODE_COLORS = ['#ff6b6b','#4ecdc4','#a8e6cf'];
+
+function paint() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for (const e of edges) {
+    const a=nodes.find(n=>n.id===e.source), b=nodes.find(n=>n.id===e.target);
+    if(!a||!b) continue;
+    const g=ctx.createLinearGradient(a.x,a.y,b.x,b.y);
+    g.addColorStop(0,NODE_COLORS[a.hop]+'44');
+    g.addColorStop(1,NODE_COLORS[b.hop]+'44');
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=g; ctx.lineWidth=1.4; ctx.stroke();
+  }
+
+  for (const n of nodes) {
+    const r = n.hop===0?23:n.hop===1?16:11;
+    const c = NODE_COLORS[n.hop];
+
+    if (n.isActive) {
+      ctx.beginPath(); ctx.arc(n.x,n.y,r+10,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,.08)'; ctx.fill();
+    }
+
+    const grd=ctx.createRadialGradient(n.x-r*.3,n.y-r*.35,0,n.x,n.y,r);
+    grd.addColorStop(0,c+'ff');
+    grd.addColorStop(1,c+'cc');
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.fillStyle=grd; ctx.fill();
+
+    if (n.isActive) {
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+    }
+
+    ctx.font=`${n.hop===0?'600 11px':'400 10px'} Inter,sans-serif`;
+    ctx.fillStyle='rgba(255,255,255,.88)';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    const lbl=n.id.length>14?n.id.slice(0,13)+'…':n.id;
+    ctx.fillText(lbl, n.x, n.y+r+5);
+  }
+}
+
+function startAnim() {
+  if(raf) cancelAnimationFrame(raf);
+  frame=0;
+  function loop(){
+    if(frame<280) tick();
+    paint();
+    frame++;
+    raf=requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+/* ═══════════════════════════════════════════
+   APP STATE
+═══════════════════════════════════════════ */
+
+let playlist     = [];
+let activeTrack  = -1;
+let brokenIds    = new Set();   // YouTube IDs that errored
+let ytPlayer     = null;        // YT.Player instance
+let ytApiReady   = false;
+let pendingPlay  = null;        // queued video ID to play once API loads
+let userHasGesture = false;     // becomes true after first user interaction
+
+/* ═══════════════════════════════════════════
+   YOUTUBE IFRAME API
+═══════════════════════════════════════════ */
+
+// Load API
+(function loadYTApi(){
+  const s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+})();
+
+// Global callback YouTube API expects
+window.onYouTubeIframeAPIReady = function() {
+  ytApiReady = true;
+  if (pendingPlay) {
+    const id = pendingPlay; pendingPlay = null;
+    createPlayer(id);
+  }
+};
+
+function ensurePlayerHost() {
+  // Replace videoBox content with the iframe host if it isn't already there
+  let host = document.getElementById('ytPlayer');
+  if (host) return host;
+  const box = document.getElementById('videoBox');
+  box.innerHTML = '<div class="yt-wrap"><div id="ytPlayer"></div><div class="unmute-banner" id="unmuteBanner" onclick="unmute()">🔊 Click to unmute</div></div>';
+  return document.getElementById('ytPlayer');
+}
+
+function createPlayer(videoId) {
+  ensurePlayerHost();
+
+  // If a player already exists, just load the new video
+  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+    try {
+      // Start muted if no user gesture yet (browsers block sound autoplay)
+      if (!userHasGesture) ytPlayer.mute();
+      ytPlayer.loadVideoById(videoId);
+      // Auto-unmute and seek-resume if we already have a gesture
+      if (userHasGesture) {
+        try { ytPlayer.unMute(); } catch(_) {}
+        document.getElementById('unmuteBanner').classList.remove('on');
+      } else {
+        document.getElementById('unmuteBanner').classList.add('on');
+      }
+      return;
+    } catch(e) { /* fall through and re-create */ }
+  }
+
+  ytPlayer = new YT.Player('ytPlayer', {
+    videoId,
+    host: 'https://www.youtube-nocookie.com',
+    playerVars: {
+      autoplay: 1,
+      rel: 0,
+      modestbranding: 1,
+      playsinline: 1,
+      // mute initially so autoplay reliably works; we unmute on first gesture
+      mute: userHasGesture ? 0 : 1,
+      origin: window.location.origin,
+    },
+    events: {
+      onReady: (e) => {
+        try { e.target.playVideo(); } catch(_) {}
+        if (!userHasGesture) {
+          document.getElementById('unmuteBanner').classList.add('on');
+        }
+      },
+      onError: (e) => {
+        // 2 = invalid param, 5 = HTML5 error, 100 = not found / private,
+        // 101 / 150 = embedding disabled by uploader
+        handlePlaybackError(videoId, e.data);
+      },
+      onStateChange: (e) => {
+        // YT.PlayerState.ENDED = 0
+        if (e.data === 0) playNext();
+      }
+    }
+  });
+}
+
+function unmute() {
+  userHasGesture = true;
+  if (ytPlayer) {
+    try {
+      ytPlayer.unMute();
+      ytPlayer.setVolume(80);
+      ytPlayer.playVideo();
+    } catch(_) {}
+  }
+  document.getElementById('unmuteBanner').classList.remove('on');
+}
+
+function handlePlaybackError(videoId, code) {
+  brokenIds.add(videoId);
+  // Show fallback UI for this track
+  const cur = playlist[activeTrack];
+  const ytWatch = `https://www.youtube.com/watch?v=${videoId}`;
+  const ytSearch = cur
+    ? `https://www.youtube.com/results?search_query=${encodeURIComponent(cur.artist + ' ' + cur.title)}`
+    : `https://www.youtube.com/results?search_query=${videoId}`;
+
+  document.getElementById('videoBox').innerHTML = `
+    <div class="video-overlay">
+      <div class="nv-icon">🚫</div>
+      <div class="nv-title">This track can't be embedded</div>
+      <div class="nv-sub">
+        ${code === 101 || code === 150
+          ? 'The uploader disabled embedding on third-party sites.'
+          : code === 100
+            ? 'Video unavailable or removed.'
+            : 'Playback failed in the embedded player.'}
+        <br/>You can still listen on YouTube directly.
+      </div>
+      <a class="yt-link" href="${ytWatch}" target="_blank" rel="noopener">▶ Open on YouTube</a>
+      <a class="yt-link" style="background:#222;margin-left:6px" href="${ytSearch}" target="_blank" rel="noopener">🔎 Search</a>
+      <br/>
+      <button class="skip-link" onclick="playNext()">Skip to next track →</button>
+    </div>
+  `;
+  // Mark in track list and re-render
+  renderTrackList();
+  // Auto-advance after a short pause so the demo keeps flowing
+  clearTimeout(window.__autoSkip);
+  window.__autoSkip = setTimeout(() => {
+    if (activeTrack >= 0 && playlist[activeTrack] && playlist[activeTrack].id === videoId) {
+      playNext();
+    }
+  }, 3500);
+}
+
+function playNext() {
+  // Find next non-broken track
+  for (let i = activeTrack + 1; i < playlist.length; i++) {
+    if (!brokenIds.has(playlist[i].id)) {
+      playTrack(i);
+      return;
+    }
+  }
+  toast('🏁 Reached the end of the playlist');
+}
+
+/* ═══════════════════════════════════════════
+   GENERATE
+═══════════════════════════════════════════ */
+
+function generate() {
+  // Capture user gesture — important for unmuted autoplay
+  userHasGesture = true;
+
+  const raw = document.getElementById('searchInput').value.trim();
+  if(!raw){ toast('Enter an artist or mood first!'); return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.textContent='⏳ Building map…';
+  btn.classList.add('busy');
+  document.getElementById('loadingBar').classList.add('on');
+
+  setTimeout(()=>{
+    const resolved = resolveSeed(raw);
+    if(!resolved){
+      toast(`"${raw}" not found. Try: Drake, Billie Eilish, chill…`);
+      btn.textContent='Generate Playlist ✨'; btn.classList.remove('busy');
+      document.getElementById('loadingBar').classList.remove('on');
+      return;
+    }
+
+    const { mood, seed } = resolved;
+    const { visited, edges: edgeList } = bfs(seed);
+
+    initCanvas();
+    document.getElementById('graphEmpty').style.display='none';
+    document.getElementById('graphLegend').style.display='flex';
+    document.getElementById('graphMeta').textContent=
+      `${visited.size} artists · ${edgeList.length} connections`;
+    buildForceGraph(visited, edgeList);
+    startAnim();
+
+    playlist = [...visited.entries()]
+      .sort((a,b)=>a[1]-b[1])
+      .map(([artist, hop])=>{
+        const s = SONGS[artist];
+        if(!s) return null;
+        return { artist, hop, title:s.title, id:s.id };
+      })
+      .filter(Boolean);
+
+    renderTrackList();
+
+    const vibeKey = mood || 'default';
+    document.getElementById('vibeText').textContent = VIBES[vibeKey] || VIBES.default;
+    document.getElementById('vibeCard').style.display='block';
+
+    if(playlist.length) setTimeout(()=>playTrack(0), 500);
+
+    btn.textContent='Generate Playlist ✨'; btn.classList.remove('busy');
+    document.getElementById('loadingBar').classList.remove('on');
+    toast(`🎵 Generated ${playlist.length} tracks from "${seed}"`);
+  }, 700);
+}
+
+/* ═══════════════════════════════════════════
+   RENDER TRACK LIST
+═══════════════════════════════════════════ */
+
+function renderTrackList() {
+  const el = document.getElementById('trackList');
+  document.getElementById('trackCount').textContent = `${playlist.length} tracks`;
+
+  if(!playlist.length){ el.innerHTML='<div class="tl-empty">No tracks found</div>'; return; }
+
+  el.innerHTML = playlist.map((t,i)=>{
+    const broken = brokenIds.has(t.id);
+    return `
+    <div class="track ${i===activeTrack?'active':''} ${broken?'broken':''}" onclick="playTrack(${i})">
+      <span class="track-num">${i===activeTrack?'▶':i+1}</span>
+      <div class="track-info">
+        <div class="track-title">${t.title}${broken?' <span style="font-size:9px;color:#ff6b6b">⚠</span>':''}</div>
+        <div class="track-sub">
+          ${t.artist}
+          <span class="hop-badge hop-${t.hop}">${t.hop===0?'seed':`hop ${t.hop}`}</span>
+        </div>
+      </div>
+      <button class="play-btn">▶</button>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════
+   PLAYBACK
+═══════════════════════════════════════════ */
+
+function playTrack(i) {
+  if(i<0||i>=playlist.length) return;
+  userHasGesture = true;        // direct click counts as gesture
+  clearTimeout(window.__autoSkip);
+
+  activeTrack=i;
+  const t=playlist[i];
+
+  document.getElementById('npMeta').style.display='block';
+  document.getElementById('npSong').textContent=t.title;
+  document.getElementById('npArtist').textContent=t.artist;
+  document.getElementById('npDot').style.display='block';
+
+  // Highlight graph node
+  for(const n of nodes) n.isActive = n.id===t.artist;
+  paint();
+
+  renderTrackList();
+
+  // Play through the IFrame API
+  if (ytApiReady && typeof YT !== 'undefined' && YT.Player) {
+    createPlayer(t.id);
+  } else {
+    pendingPlay = t.id;
+    ensurePlayerHost(); // show the host immediately for nicer UX
+  }
+}
+
+/* ═══════════════════════════════════════════
+   MOOD CHIPS
+═══════════════════════════════════════════ */
+
+function quickMood(mood, el) {
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('searchInput').value=mood;
+  generate();
+}
+
+/* ═══════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════ */
+
+function toast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+/* ═══════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════ */
+
+initCanvas();
+
+(function(){
+  ctx.strokeStyle='rgba(255,255,255,.04)';
+  ctx.lineWidth=1;
+  for(let x=0;x<canvas.width;x+=60){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+  }
+  for(let y=0;y<canvas.height;y+=60){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+  }
+})();
+
+document.getElementById('searchInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter') generate();
+});
+
+window.addEventListener('resize', ()=>{
+  if(nodes.length){ initCanvas(); paint(); }
+  else initCanvas();
+});
+
+// Any click anywhere counts as a user gesture for autoplay-with-sound
+document.addEventListener('click', () => { userHasGesture = true; }, { once: true });
+</script>
+</body>
+</html>
