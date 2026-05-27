@@ -101,7 +101,7 @@
   .label {
     position: absolute;
     transform: translate(-50%, -50%);
-    font-size: 12px;
+    font-size: 7px;
     font-weight: 500;
     white-space: nowrap;
     pointer-events: auto;
@@ -116,7 +116,7 @@
   }
   .label.seed {
     font-weight: 700;
-    font-size: 16px;
+    font-size: 11px;
   }
   #loading {
     position: fixed;
@@ -406,7 +406,7 @@ function renderLabels(names, pos, communities, palette, Pop) {
     // Lighten for readability on tinted background
     el.style.color = i === 0 ? '#fff' : lighten(c.hsl, 25);
     const sizeBoost = Pop[i] ? Math.log10(1 + Pop[i]) / Math.log10(1 + maxPop) : 0.5;
-    if (i !== 0) el.style.fontSize = (10 + sizeBoost * 5) + 'px';
+    if (i !== 0) el.style.fontSize = (5 + sizeBoost * 5) + 'px';
     el.title = name + '  (cluster ' + communities[i] + ')';
     el.addEventListener('click', () => {
       document.getElementById('seed').value = name;
