@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Music Map — Genre Regions</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0f0f12;
+    color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+  }
+  #controls {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 100;
+    background: rgba(20,20,25,0.85);
+    backdrop-filter: blur(8px);
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #controls input {
+    background: #1a1a20;
+    border: 1px solid #444;
+    color: #eee;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 180px;
+    outline: none;
+  }
+  #controls input:focus { border-color: #888; }
+  #controls button {
+    background: #2a6df4;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  #controls button:hover { background: #3a7df5; }
+  #controls button:disabled { background: #444; cursor: wait; }
+  #status {
+    font-size: 12px;
+    color: #888;
+    margin-left: 4px;
+  }
+  #legend {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 100;
+    background: rgba(20,20,25,0.85);
+    backdrop-filter: blur(8px);
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    font-size: 12px;
+    max-width: 200px;
+  }
+  #legend h4 {
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #aaa;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+  #stage {
+    position: fixed;
+    inset: 0;
+    cursor: grab;
+  }
+  #stage.dragging { cursor: grabbing; }
+  #field { position: absolute; top: 0; left: 0; }
+  #labels {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: auto;
+    cursor: pointer;
+    text-shadow: 0 0 4px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9);
+    transition: transform 0.15s, font-size 0.15s;
+    user-select: none;
+  }
+  .label:hover {
+    transform: translate(-50%, -50%) scale(1.25);
+    z-index: 10;
+  }
+  .label.seed {
+    font-weight: 700;
+    font-size: 16px;
+  }
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: #0f0f12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    font-size: 14px;
+    color: #888;
+    flex-direction: column;
+    gap: 12px;
+    transition: opacity 0.3s;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #333;
+    border-top-color: #2a6df4;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <input id="seed" type="text" value="stereolab" placeholder="artist name..." />
+  <button id="go">Load</button>
+  <span id="status"></span>
+</div>
+
+<div id="legend">
+  <h4>Clusters</h4>
+  <div id="legend-items"></div>
+</div>
+
+<div id="stage">
+  <canvas id="field"></canvas>
+  <div id="labels"></div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loading-text">Loading…</div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const PROXY = 'https://corsproxy.io/?';
+const W = 1400, H = 900;
+const PAD = 60;
+
+// ============================================================
+// FETCH & PARSE
+// ============================================================
+async function loadMap(seed) {
+  const slug = seed.toLowerCase().trim().replace(/\s+/g, '-');
+  const target = `https://www.music-map.com/${slug}`;
+  const url = PROXY + encodeURIComponent(target);
+
+  setStatus('Fetching music-map.com…');
+  const html = await fetch(url).then(r => {
+    if (!r.ok) throw new Error('Fetch failed: ' + r.status);
+    return r.text();
+  });
+
+  // Artist names from <a class=S id=sN>Name</a>
+  const nameMatches = [...html.matchAll(/<a[^>]*\bid=s(\d+)\b[^>]*>([^<]+)<\/a>/g)];
+  if (nameMatches.length === 0) throw new Error('No artists found — artist may not exist on Music-Map.');
+
+  const names = [];
+  nameMatches.forEach(m => { names[+m[1]] = decodeHtml(m[2].trim()); });
+
+  // Aid similarity matrix
+  const aidMatches = [...html.matchAll(/Aid\[(\d+)\]\s*=\s*new Array\(([^)]+)\)/g)];
+  const Aid = [];
+  aidMatches.forEach(m => {
+    Aid[+m[1]] = m[2].split(',').map(Number);
+  });
+
+  // Popularity
+  const popMatch = html.match(/window\.Pop\s*=\s*new Array\(([^)]+)\)/);
+  const Pop = popMatch ? popMatch[1].split(',').map(Number) : names.map(() => 10000);
+
+  return { names, Aid, Pop };
+}
+
+function decodeHtml(s) {
+  const t = document.createElement('textarea');
+  t.innerHTML = s;
+  return t.value;
+}
+
+// ============================================================
+// FORCE-DIRECTED LAYOUT
+// ============================================================
+function layout(Aid, names, Pop) {
+  const N = names.length;
+  const pos = names.map((_, i) => {
+    const angle = (i / N) * Math.PI * 2;
+    const r = 200 + Math.random() * 100;
+    return { x: W/2 + Math.cos(angle)*r, y: H/2 + Math.sin(angle)*r };
+  });
+
+  // Pin seed at center
+  pos[0] = { x: W/2, y: H/2 };
+
+  const ITERS = 500;
+  for (let it = 0; it < ITERS; it++) {
+    const alpha = Math.pow(1 - it/ITERS, 1.5);
+    const force = pos.map(() => ({ x: 0, y: 0 }));
+
+    for (let i = 0; i < N; i++) {
+      for (let j = i+1; j < N; j++) {
+        const dx = pos[j].x - pos[i].x;
+        const dy = pos[j].y - pos[i].y;
+        let d = Math.sqrt(dx*dx + dy*dy);
+        if (d < 0.1) d = 0.1;
+        const ux = dx/d, uy = dy/d;
+        const a = Aid[i] ? Aid[i][j] : -1;
+
+        // Repulsion
+        const rep = 3500 / (d*d);
+        force[i].x -= ux*rep; force[i].y -= uy*rep;
+        force[j].x += ux*rep; force[j].y += uy*rep;
+
+        // Attraction (spring) if related
+        if (a > 0) {
+          const target = 240 / (1 + Math.log(1 + a));
+          const k = 0.04 * Math.min(a, 6);
+          const spring = (d - target) * k;
+          force[i].x += ux*spring; force[i].y += uy*spring;
+          force[j].x -= ux*spring; force[j].y -= uy*spring;
+        }
+      }
+      // Gentle pull toward center
+      const cx = W/2, cy = H/2;
+      force[i].x += (cx - pos[i].x) * 0.0008;
+      force[i].y += (cy - pos[i].y) * 0.0008;
+    }
+
+    for (let i = 0; i < N; i++) {
+      if (i === 0) continue; // seed pinned
+      const max = 20;
+      let fx = force[i].x * alpha;
+      let fy = force[i].y * alpha;
+      const fm = Math.sqrt(fx*fx + fy*fy);
+      if (fm > max) { fx *= max/fm; fy *= max/fm; }
+      pos[i].x = Math.max(PAD, Math.min(W - PAD, pos[i].x + fx));
+      pos[i].y = Math.max(PAD, Math.min(H - PAD, pos[i].y + fy));
+    }
+  }
+  return pos;
+}
+
+// ============================================================
+// COMMUNITY DETECTION (label propagation)
+// ============================================================
+function detectCommunities(Aid, N) {
+  let labels = Array.from({length: N}, (_, i) => i);
+  for (let pass = 0; pass < 30; pass++) {
+    const order = shuffle([...Array(N).keys()]);
+    let changed = false;
+    for (const i of order) {
+      const votes = {};
+      for (let j = 0; j < N; j++) {
+        if (i === j) continue;
+        const a = Aid[i] ? Aid[i][j] : -1;
+        if (a > 0) {
+          votes[labels[j]] = (votes[labels[j]] || 0) + a;
+        }
+      }
+      const entries = Object.entries(votes);
+      if (entries.length === 0) continue;
+      entries.sort((a,b) => b[1] - a[1]);
+      const best = +entries[0][0];
+      if (best !== labels[i]) { labels[i] = best; changed = true; }
+    }
+    if (!changed) break;
+  }
+  // Renumber to 0,1,2,...
+  const map = {};
+  let next = 0;
+  return labels.map(l => {
+    if (!(l in map)) map[l] = next++;
+    return map[l];
+  });
+}
+
+function shuffle(a) {
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ============================================================
+// COLOR ASSIGNMENT
+// ============================================================
+function buildPalette(communities) {
+  const unique = [...new Set(communities)];
+  const palette = {};
+  unique.forEach((c, i) => {
+    const hue = (i * 360 / unique.length + 20) % 360;
+    palette[c] = {
+      hsl: `hsl(${hue}, 70%, 60%)`,
+      rgb: hslToRgb(hue, 70, 60)
+    };
+  });
+  return palette;
+}
+
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  return { r: Math.round(255*f(0)), g: Math.round(255*f(8)), b: Math.round(255*f(4)) };
+}
+
+// ============================================================
+// PAINT GRADIENT FIELD (regions)
+// ============================================================
+function paintField(ctx, pos, rgbs, w, h) {
+  const STEP = 4;       // pixel block size — smaller = sharper, slower
+  const K = 5;          // nearest neighbors to blend
+  const SIGMA2 = 14000; // falloff
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+
+  for (let y = 0; y < h; y += STEP) {
+    for (let x = 0; x < w; x += STEP) {
+      // K nearest
+      const ds = [];
+      for (let i = 0; i < pos.length; i++) {
+        const dx = pos[i].x - x, dy = pos[i].y - y;
+        ds.push({ i, d2: dx*dx + dy*dy });
+      }
+      ds.sort((a,b) => a.d2 - b.d2);
+
+      let r = 0, g = 0, b = 0, wsum = 0;
+      for (let k = 0; k < K; k++) {
+        const { i, d2 } = ds[k];
+        const w_ = Math.exp(-d2 / SIGMA2);
+        const c = rgbs[i];
+        r += c.r * w_; g += c.g * w_; b += c.b * w_; wsum += w_;
+      }
+      r /= wsum; g /= wsum; b /= wsum;
+
+      // Fill STEP x STEP block
+      for (let dy = 0; dy < STEP && y+dy < h; dy++) {
+        for (let dx = 0; dx < STEP && x+dx < w; dx++) {
+          const idx = ((y+dy)*w + (x+dx)) * 4;
+          data[idx]   = r;
+          data[idx+1] = g;
+          data[idx+2] = b;
+          data[idx+3] = 180;
+        }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// ============================================================
+// RENDER LABELS
+// ============================================================
+function renderLabels(names, pos, communities, palette, Pop) {
+  const container = document.getElementById('labels');
+  container.innerHTML = '';
+  const maxPop = Math.max(...Pop);
+
+  names.forEach((name, i) => {
+    const el = document.createElement('div');
+    el.className = 'label' + (i === 0 ? ' seed' : '');
+    el.textContent = name;
+    el.style.left = pos[i].x + 'px';
+    el.style.top  = pos[i].y + 'px';
+    const c = palette[communities[i]];
+    // Lighten for readability on tinted background
+    el.style.color = i === 0 ? '#fff' : lighten(c.hsl, 25);
+    const sizeBoost = Pop[i] ? Math.log10(1 + Pop[i]) / Math.log10(1 + maxPop) : 0.5;
+    if (i !== 0) el.style.fontSize = (10 + sizeBoost * 5) + 'px';
+    el.title = name + '  (cluster ' + communities[i] + ')';
+    el.addEventListener('click', () => {
+      document.getElementById('seed').value = name;
+      run(name);
+    });
+    container.appendChild(el);
+  });
+}
+
+function lighten(hsl, byL) {
+  const m = hsl.match(/hsl\(([\d.]+),\s*([\d.]+)%,\s*([\d.]+)%/);
+  if (!m) return hsl;
+  return `hsl(${m[1]}, ${m[2]}%, ${Math.min(90, +m[3] + byL)}%)`;
+}
+
+// ============================================================
+// LEGEND
+// ============================================================
+function renderLegend(communities, palette, names) {
+  const container = document.getElementById('legend-items');
+  container.innerHTML = '';
+  const groups = {};
+  communities.forEach((c, i) => {
+    (groups[c] = groups[c] || []).push(names[i]);
+  });
+  // Sort clusters by size
+  const sorted = Object.entries(groups).sort((a,b) => b[1].length - a[1].length);
+  sorted.forEach(([c, members]) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `
+      <div class="legend-swatch" style="background:${palette[c].hsl}"></div>
+      <div>${members.length} artists<br><span style="color:#888;font-size:10px">${members.slice(0,2).join(', ')}${members.length>2?'…':''}</span></div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+// ============================================================
+// PAN & ZOOM
+// ============================================================
+function setupPanZoom() {
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('field');
+  const labels = document.getElementById('labels');
+  let tx = 0, ty = 0, scale = 1;
+  let dragging = false, sx = 0, sy = 0;
+
+  function apply() {
+    const t = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    canvas.style.transform = t;
+    labels.style.transform = t;
+    canvas.style.transformOrigin = '0 0';
+    labels.style.transformOrigin = '0 0';
+  }
+
+  stage.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('label')) return;
+    dragging = true; stage.classList.add('dragging');
+    sx = e.clientX - tx; sy = e.clientY - ty;
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    tx = e.clientX - sx; ty = e.clientY - sy;
+    apply();
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false; stage.classList.remove('dragging');
+  });
+  stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.001;
+    const newScale = Math.max(0.3, Math.min(3, scale * (1 + delta)));
+    const rect = stage.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    tx = mx - (mx - tx) * (newScale / scale);
+    ty = my - (my - ty) * (newScale / scale);
+    scale = newScale;
+    apply();
+  }, { passive: false });
+
+  // Center initially
+  function center() {
+    const rect = stage.getBoundingClientRect();
+    tx = (rect.width  - W) / 2;
+    ty = (rect.height - H) / 2;
+    apply();
+  }
+  center();
+  window.addEventListener('resize', center);
+}
+
+// ============================================================
+// STATUS
+// ============================================================
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg || '';
+  document.getElementById('loading-text').textContent = msg || 'Loading…';
+}
+
+function showLoading(show) {
+  document.getElementById('loading').classList.toggle('hidden', !show);
+}
+
+// ============================================================
+// MAIN
+// ============================================================
+async function run(seed) {
+  const btn = document.getElementById('go');
+  btn.disabled = true;
+  showLoading(true);
+  try {
+    const { names, Aid, Pop } = await loadMap(seed);
+    setStatus(`Computing layout for ${names.length} artists…`);
+    await new Promise(r => setTimeout(r, 30)); // let UI breathe
+
+    const pos = layout(Aid, names, Pop);
+    setStatus('Detecting clusters…');
+    await new Promise(r => setTimeout(r, 30));
+
+    const communities = detectCommunities(Aid, names.length);
+    const palette = buildPalette(communities);
+    const rgbs = communities.map(c => palette[c].rgb);
+
+    const canvas = document.getElementById('field');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    setStatus('Painting regions…');
+    await new Promise(r => setTimeout(r, 30));
+    paintField(ctx, pos, rgbs, W, H);
+
+    renderLabels(names, pos, communities, palette, Pop);
+    renderLegend(communities, palette, names);
+    setStatus(`${names.length} artists, ${new Set(communities).size} clusters`);
+  } catch (err) {
+    console.error(err);
+    setStatus('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    showLoading(false);
+  }
+}
+
+document.getElementById('go').addEventListener('click', () => {
+  run(document.getElementById('seed').value);
+});
+document.getElementById('seed').addEventListener('keydown', e => {
+  if (e.key === 'Enter') run(e.target.value);
+});
+
+setupPanZoom();
+run('stereolab');
+</script>
+
+</body>
+</html>
