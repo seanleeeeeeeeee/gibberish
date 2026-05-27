@@ -14,51 +14,32 @@
   }
   #controls {
     position: fixed;
-    top: 12px;
-    left: 12px;
+    top: 12px; left: 12px;
     z-index: 100;
     background: rgba(20,20,25,0.85);
     backdrop-filter: blur(8px);
     padding: 12px 14px;
     border-radius: 10px;
     border: 1px solid #333;
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    display: flex; gap: 8px; align-items: center;
   }
   #controls input {
-    background: #1a1a20;
-    border: 1px solid #444;
-    color: #eee;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 13px;
-    width: 220px;
-    outline: none;
+    background: #1a1a20; border: 1px solid #444; color: #eee;
+    padding: 6px 10px; border-radius: 6px; font-size: 13px;
+    width: 220px; outline: none;
   }
   #controls input:focus { border-color: #888; }
   #controls button {
-    background: #2a6df4;
-    color: white;
-    border: none;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    font-weight: 500;
+    background: #2a6df4; color: white; border: none;
+    padding: 6px 14px; border-radius: 6px; font-size: 13px;
+    cursor: pointer; font-weight: 500;
   }
   #controls button:hover { background: #3a7df5; }
   #controls button:disabled { background: #444; cursor: wait; }
-  #status {
-    font-size: 12px;
-    color: #888;
-    margin-left: 4px;
-    max-width: 280px;
-  }
+  #status { font-size: 12px; color: #888; margin-left: 4px; max-width: 280px; }
   #legend {
     position: fixed;
-    top: 12px;
-    right: 12px;
+    top: 12px; right: 12px;
     z-index: 100;
     background: rgba(20,20,25,0.85);
     backdrop-filter: blur(8px);
@@ -66,7 +47,9 @@
     border-radius: 10px;
     border: 1px solid #333;
     font-size: 12px;
-    max-width: 200px;
+    max-width: 240px;
+    max-height: 85vh;
+    overflow-y: auto;
     display: none;
   }
   #legend.visible { display: block; }
@@ -79,25 +62,39 @@
   }
   .legend-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
-    margin: 4px 0;
+    margin: 6px 0;
+    padding: 4px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s;
   }
+  .legend-item:hover { background: rgba(255,255,255,0.06); }
   .legend-swatch {
-    width: 14px;
-    height: 14px;
+    width: 14px; height: 14px;
     border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 2px;
   }
-  #stage {
-    position: fixed;
-    inset: 0;
-    cursor: grab;
+  .legend-genre {
+    font-style: italic;
+    font-size: 11px;
+    color: #d8d8d8;
+    line-height: 1.3;
   }
+  .legend-genre.loading { color: #666; }
+  .legend-meta {
+    font-size: 10px;
+    color: #888;
+    margin-top: 2px;
+  }
+  #stage { position: fixed; inset: 0; cursor: grab; }
   #stage.dragging { cursor: grabbing; }
-  #field { position: absolute; top: 0; left: 0; }
+  #field, #overlay { position: absolute; top: 0; left: 0; }
+  #overlay { pointer-events: none; mix-blend-mode: screen; }
   #labels {
-    position: absolute;
-    top: 0; left: 0;
+    position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
     pointer-events: none;
   }
@@ -117,18 +114,11 @@
     transform: translate(-50%, -50%) scale(1.25);
     z-index: 10;
   }
-  .label.seed {
-    font-weight: 700;
-    font-size: 16px;
-  }
+  .label.seed { font-weight: 700; font-size: 16px; }
   #welcome {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-    pointer-events: none;
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50; pointer-events: none;
   }
   #welcome.hidden { display: none; }
   #welcome .card {
@@ -141,55 +131,25 @@
     pointer-events: auto;
     max-width: 480px;
   }
-  #welcome h1 {
-    margin: 0 0 8px 0;
-    font-size: 22px;
-    font-weight: 600;
-  }
-  #welcome p {
-    margin: 6px 0;
-    color: #aaa;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-  #welcome .examples {
-    margin-top: 16px;
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
+  #welcome h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 600; }
+  #welcome p { margin: 6px 0; color: #aaa; font-size: 13px; line-height: 1.5; }
+  #welcome .examples { margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
   #welcome .examples button {
-    background: #1a1a20;
-    border: 1px solid #444;
-    color: #ccc;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
+    background: #1a1a20; border: 1px solid #444; color: #ccc;
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
   }
-  #welcome .examples button:hover {
-    background: #2a2a30;
-    border-color: #666;
-  }
+  #welcome .examples button:hover { background: #2a2a30; border-color: #666; }
   #loading {
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     background: rgba(15,15,18,0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    font-size: 14px;
-    color: #888;
-    flex-direction: column;
-    gap: 12px;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; font-size: 14px; color: #888;
+    flex-direction: column; gap: 12px;
     transition: opacity 0.3s;
   }
   #loading.hidden { opacity: 0; pointer-events: none; }
   .spinner {
-    width: 28px;
-    height: 28px;
+    width: 28px; height: 28px;
     border: 3px solid #333;
     border-top-color: #2a6df4;
     border-radius: 50%;
@@ -213,6 +173,7 @@
 
 <div id="stage">
   <canvas id="field"></canvas>
+  <canvas id="overlay"></canvas>
   <div id="labels"></div>
 </div>
 
@@ -220,7 +181,7 @@
   <div class="card">
     <h1>🎵 Music Map</h1>
     <p>Type any artist name above to generate a genre-colored similarity map.</p>
-    <p style="font-size:11px;color:#666">Data scraped from music-map.com · regions auto-clustered from similarity graph</p>
+    <p style="font-size:11px;color:#666">Data from music-map.com · clusters auto-detected · genres via ListenBrainz</p>
     <div class="examples">
       <button data-artist="Radiohead">Radiohead</button>
       <button data-artist="Stereolab">Stereolab</button>
@@ -249,64 +210,47 @@ const W = 1400, H = 900;
 const PAD = 60;
 
 // ============================================================
-// FETCH & PARSE
+// FETCH MAP
 // ============================================================
 async function loadMap(seed) {
   const slug = seed.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
   if (!slug) throw new Error('Please enter an artist name.');
   const target = `https://www.music-map.com/${slug}`;
 
-  let html = null;
-  let lastErr = null;
+  let html = null, lastErr = null;
   for (let i = 0; i < PROXIES.length; i++) {
     try {
       setStatus(`Fetching via proxy ${i+1}/${PROXIES.length}…`);
-      const url = PROXIES[i](target);
-      const res = await fetch(url);
+      const res = await fetch(PROXIES[i](target));
       if (!res.ok) throw new Error('HTTP ' + res.status);
       html = await res.text();
       if (html && html.length > 500) break;
       throw new Error('Empty response');
-    } catch (e) {
-      lastErr = e;
-      console.warn(`Proxy ${i+1} failed:`, e.message);
-    }
+    } catch (e) { lastErr = e; console.warn(`Proxy ${i+1} failed:`, e.message); }
   }
   if (!html) throw new Error('All proxies failed. ' + (lastErr?.message || ''));
 
-  // Artist names
   const nameMatches = [...html.matchAll(/<a[^>]*\bid=s(\d+)\b[^>]*>([^<]+)<\/a>/g)];
   if (nameMatches.length === 0) {
-    throw new Error(`No artists found for "${seed}". Try a different spelling or a more popular artist.`);
+    throw new Error(`No artists found for "${seed}". Try a different spelling.`);
   }
-
   const names = [];
   nameMatches.forEach(m => { names[+m[1]] = decodeHtml(m[2].trim()); });
 
-  // Aid matrix
   const aidMatches = [...html.matchAll(/Aid\[(\d+)\]\s*=\s*new Array\(([^)]+)\)/g)];
   const Aid = [];
-  aidMatches.forEach(m => {
-    Aid[+m[1]] = m[2].split(',').map(Number);
-  });
-
+  aidMatches.forEach(m => { Aid[+m[1]] = m[2].split(',').map(Number); });
   if (Aid.length === 0) throw new Error('Could not parse similarity data.');
 
-  // Popularity
   const popMatch = html.match(/window\.Pop\s*=\s*new Array\(([^)]+)\)/);
   const Pop = popMatch ? popMatch[1].split(',').map(Number) : names.map(() => 10000);
 
   return { names, Aid, Pop };
 }
-
-function decodeHtml(s) {
-  const t = document.createElement('textarea');
-  t.innerHTML = s;
-  return t.value;
-}
+function decodeHtml(s) { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; }
 
 // ============================================================
-// FORCE-DIRECTED LAYOUT
+// LAYOUT
 // ============================================================
 function layout(Aid, names) {
   const N = names.length;
@@ -321,7 +265,6 @@ function layout(Aid, names) {
   for (let it = 0; it < ITERS; it++) {
     const alpha = Math.pow(1 - it/ITERS, 1.5);
     const force = pos.map(() => ({ x: 0, y: 0 }));
-
     for (let i = 0; i < N; i++) {
       for (let j = i+1; j < N; j++) {
         const dx = pos[j].x - pos[i].x;
@@ -330,11 +273,9 @@ function layout(Aid, names) {
         if (d < 0.1) d = 0.1;
         const ux = dx/d, uy = dy/d;
         const a = Aid[i] ? Aid[i][j] : -1;
-
         const rep = 3500 / (d*d);
         force[i].x -= ux*rep; force[i].y -= uy*rep;
         force[j].x += ux*rep; force[j].y += uy*rep;
-
         if (a > 0) {
           const target = 240 / (1 + Math.log(1 + a));
           const k = 0.04 * Math.min(a, 6);
@@ -343,16 +284,13 @@ function layout(Aid, names) {
           force[j].x -= ux*spring; force[j].y -= uy*spring;
         }
       }
-      const cx = W/2, cy = H/2;
-      force[i].x += (cx - pos[i].x) * 0.0008;
-      force[i].y += (cy - pos[i].y) * 0.0008;
+      force[i].x += (W/2 - pos[i].x) * 0.0008;
+      force[i].y += (H/2 - pos[i].y) * 0.0008;
     }
-
     for (let i = 0; i < N; i++) {
       if (i === 0) continue;
       const max = 20;
-      let fx = force[i].x * alpha;
-      let fy = force[i].y * alpha;
+      let fx = force[i].x * alpha, fy = force[i].y * alpha;
       const fm = Math.sqrt(fx*fx + fy*fy);
       if (fm > max) { fx *= max/fm; fy *= max/fm; }
       pos[i].x = Math.max(PAD, Math.min(W - PAD, pos[i].x + fx));
@@ -375,9 +313,7 @@ function detectCommunities(Aid, N) {
       for (let j = 0; j < N; j++) {
         if (i === j) continue;
         const a = Aid[i] ? Aid[i][j] : -1;
-        if (a > 0) {
-          votes[labels[j]] = (votes[labels[j]] || 0) + a;
-        }
+        if (a > 0) votes[labels[j]] = (votes[labels[j]] || 0) + a;
       }
       const entries = Object.entries(votes);
       if (entries.length === 0) continue;
@@ -387,14 +323,9 @@ function detectCommunities(Aid, N) {
     }
     if (!changed) break;
   }
-  const map = {};
-  let next = 0;
-  return labels.map(l => {
-    if (!(l in map)) map[l] = next++;
-    return map[l];
-  });
+  const map = {}; let next = 0;
+  return labels.map(l => { if (!(l in map)) map[l] = next++; return map[l]; });
 }
-
 function shuffle(a) {
   for (let i = a.length-1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i+1));
@@ -411,14 +342,10 @@ function buildPalette(communities) {
   const palette = {};
   unique.forEach((c, i) => {
     const hue = (i * 360 / unique.length + 20) % 360;
-    palette[c] = {
-      hsl: `hsl(${hue}, 70%, 60%)`,
-      rgb: hslToRgb(hue, 70, 60)
-    };
+    palette[c] = { hsl: `hsl(${hue}, 70%, 60%)`, rgb: hslToRgb(hue, 70, 60), hue };
   });
   return palette;
 }
-
 function hslToRgb(h, s, l) {
   s /= 100; l /= 100;
   const k = n => (n + h/30) % 12;
@@ -428,14 +355,15 @@ function hslToRgb(h, s, l) {
 }
 
 // ============================================================
-// PAINT FIELD
+// PAINT FIELD — also returns nearest-cluster mask
 // ============================================================
-function paintField(ctx, pos, rgbs, w, h) {
-  const STEP = 4;
-  const K = 5;
-  const SIGMA2 = 14000;
+function paintField(ctx, pos, rgbs, communities, w, h) {
+  const STEP = 4, K = 5, SIGMA2 = 14000;
   const img = ctx.createImageData(w, h);
   const data = img.data;
+  const blocksX = Math.ceil(w / STEP);
+  const blocksY = Math.ceil(h / STEP);
+  const mask = new Int16Array(blocksX * blocksY);
 
   for (let y = 0; y < h; y += STEP) {
     for (let x = 0; x < w; x += STEP) {
@@ -445,6 +373,8 @@ function paintField(ctx, pos, rgbs, w, h) {
         ds.push({ i, d2: dx*dx + dy*dy });
       }
       ds.sort((a,b) => a.d2 - b.d2);
+      const bx = x / STEP | 0, by = y / STEP | 0;
+      mask[by * blocksX + bx] = communities[ds[0].i];
 
       let r = 0, g = 0, b = 0, wsum = 0;
       for (let k = 0; k < K; k++) {
@@ -458,66 +388,149 @@ function paintField(ctx, pos, rgbs, w, h) {
       for (let dy = 0; dy < STEP && y+dy < h; dy++) {
         for (let dx = 0; dx < STEP && x+dx < w; dx++) {
           const idx = ((y+dy)*w + (x+dx)) * 4;
-          data[idx]   = r;
-          data[idx+1] = g;
-          data[idx+2] = b;
-          data[idx+3] = 180;
+          data[idx] = r; data[idx+1] = g; data[idx+2] = b; data[idx+3] = 180;
         }
       }
     }
   }
   ctx.putImageData(img, 0, 0);
+  return { mask, blocksX, blocksY, STEP };
 }
 
 // ============================================================
-// LABELS & LEGEND
+// HIGHLIGHT OVERLAY
+// ============================================================
+function highlightCluster(clusterId) {
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (clusterId === null || clusterId === undefined || !mapState) return;
+  const { mask, blocksX, blocksY, STEP } = mapState.maskData;
+  // 'screen' blend mode + white-ish fill = "lighten" effect
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  for (let by = 0; by < blocksY; by++) {
+    for (let bx = 0; bx < blocksX; bx++) {
+      if (mask[by * blocksX + bx] === clusterId) {
+        ctx.fillRect(bx * STEP, by * STEP, STEP, STEP);
+      }
+    }
+  }
+}
+
+// ============================================================
+// LABELS
 // ============================================================
 function renderLabels(names, pos, communities, palette, Pop) {
   const container = document.getElementById('labels');
   container.innerHTML = '';
   const maxPop = Math.max(...Pop);
-
   names.forEach((name, i) => {
     const el = document.createElement('div');
     el.className = 'label' + (i === 0 ? ' seed' : '');
     el.textContent = name;
     el.style.left = pos[i].x + 'px';
     el.style.top  = pos[i].y + 'px';
-    const c = palette[communities[i]];
-    el.style.color = i === 0 ? '#fff' : lighten(c.hsl, 25);
-    const sizeBoost = Pop[i] ? Math.log10(1 + Pop[i]) / Math.log10(1 + maxPop) : 0.5;
-    if (i !== 0) el.style.fontSize = (10 + sizeBoost * 5) + 'px';
-    el.title = name + '  (cluster ' + communities[i] + ')';
+    el.style.color = i === 0 ? '#fff' : lighten(palette[communities[i]].hsl, 25);
+    const sb = Pop[i] ? Math.log10(1 + Pop[i]) / Math.log10(1 + maxPop) : 0.5;
+    if (i !== 0) el.style.fontSize = (10 + sb * 5) + 'px';
     el.addEventListener('click', () => navigate(name));
     container.appendChild(el);
   });
 }
-
 function lighten(hsl, byL) {
   const m = hsl.match(/hsl\(([\d.]+),\s*([\d.]+)%,\s*([\d.]+)%/);
   if (!m) return hsl;
   return `hsl(${m[1]}, ${m[2]}%, ${Math.min(90, +m[3] + byL)}%)`;
 }
 
+// ============================================================
+// LEGEND
+// ============================================================
 function renderLegend(communities, palette, names) {
   const legend = document.getElementById('legend');
   const container = document.getElementById('legend-items');
   container.innerHTML = '';
+
   const groups = {};
-  communities.forEach((c, i) => {
-    (groups[c] = groups[c] || []).push(names[i]);
-  });
+  communities.forEach((c, i) => { (groups[c] = groups[c] || []).push({ name: names[i], idx: i }); });
+  // Sort clusters by size
   const sorted = Object.entries(groups).sort((a,b) => b[1].length - a[1].length);
+
   sorted.forEach(([c, members]) => {
     const item = document.createElement('div');
     item.className = 'legend-item';
+    item.dataset.cluster = c;
+    // first artist = lowest original index in cluster (closest to seed)
+    const first = members.slice().sort((a,b) => a.idx - b.idx)[0];
     item.innerHTML = `
       <div class="legend-swatch" style="background:${palette[c].hsl}"></div>
-      <div>${members.length} artists<br><span style="color:#888;font-size:10px">${members.slice(0,2).join(', ')}${members.length>2?'…':''}</span></div>
+      <div style="flex:1;min-width:0">
+        <div class="legend-genre loading" data-cluster="${c}">fetching genre…</div>
+        <div class="legend-meta">${members.length} artists · ${members.slice(0,2).map(m=>m.name).join(', ')}${members.length>2?'…':''}</div>
+      </div>
     `;
+    item.addEventListener('mouseenter', () => highlightCluster(+c));
+    item.addEventListener('mouseleave', () => highlightCluster(null));
     container.appendChild(item);
+
+    // Async fetch genre for this cluster's representative
+    fetchGenreFor(first.name).then(genre => {
+      const el = container.querySelector(`.legend-genre[data-cluster="${c}"]`);
+      if (!el) return;
+      el.classList.remove('loading');
+      el.textContent = genre || '— unknown —';
+      if (!genre) el.style.color = '#666';
+    });
   });
   legend.classList.add('visible');
+}
+
+// ============================================================
+// LISTENBRAINZ / MUSICBRAINZ GENRE FETCH
+// ============================================================
+let mbQueue = Promise.resolve();  // MusicBrainz: 1 req/sec
+function mbThrottled(fn) {
+  const next = mbQueue.then(async () => {
+    const r = await fn();
+    await new Promise(r2 => setTimeout(r2, 1100));
+    return r;
+  });
+  mbQueue = next.catch(() => {});
+  return next;
+}
+
+async function fetchGenreFor(artistName) {
+  const key = 'genre:' + artistName.toLowerCase();
+  const cached = localStorage.getItem(key);
+  if (cached !== null) return cached || null;
+
+  try {
+    // Step 1: MusicBrainz search → MBID (rate-limited)
+    const mbid = await mbThrottled(async () => {
+      const q = encodeURIComponent('artist:"' + artistName + '"');
+      const res = await fetch(`https://musicbrainz.org/ws/2/artist/?query=${q}&fmt=json&limit=1`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.artists?.[0]?.id || null;
+    });
+    if (!mbid) { localStorage.setItem(key, ''); return null; }
+
+    // Step 2: ListenBrainz tags
+    const res = await fetch(`https://api.listenbrainz.org/1/metadata/artist/?artist_mbids=${mbid}&inc=tag`);
+    if (!res.ok) { localStorage.setItem(key, ''); return null; }
+    const data = await res.json();
+    const entry = Array.isArray(data) ? data[0] : data[mbid];
+    const tags = (entry?.tag?.artist || []).slice();
+    tags.sort((a, b) => (b.count || 0) - (a.count || 0));
+    // Prefer genre-tagged entries (those with genre_mbid), fall back to top tag
+    const genreTag = tags.find(t => t.genre_mbid) || tags[0];
+    const name = genreTag?.tag || null;
+    localStorage.setItem(key, name || '');
+    return name;
+  } catch (e) {
+    console.warn('Genre fetch failed for', artistName, e);
+    return null;
+  }
 }
 
 // ============================================================
@@ -525,19 +538,18 @@ function renderLegend(communities, palette, names) {
 // ============================================================
 function setupPanZoom() {
   const stage = document.getElementById('stage');
-  const canvas = document.getElementById('field');
-  const labels = document.getElementById('labels');
+  const els = [
+    document.getElementById('field'),
+    document.getElementById('overlay'),
+    document.getElementById('labels')
+  ];
   let tx = 0, ty = 0, scale = 1;
   let dragging = false, sx = 0, sy = 0;
 
   function apply() {
     const t = `translate(${tx}px, ${ty}px) scale(${scale})`;
-    canvas.style.transform = t;
-    labels.style.transform = t;
-    canvas.style.transformOrigin = '0 0';
-    labels.style.transformOrigin = '0 0';
+    els.forEach(el => { el.style.transform = t; el.style.transformOrigin = '0 0'; });
   }
-
   stage.addEventListener('mousedown', e => {
     if (e.target.classList.contains('label')) return;
     dragging = true; stage.classList.add('dragging');
@@ -548,9 +560,7 @@ function setupPanZoom() {
     tx = e.clientX - sx; ty = e.clientY - sy;
     apply();
   });
-  window.addEventListener('mouseup', () => {
-    dragging = false; stage.classList.remove('dragging');
-  });
+  window.addEventListener('mouseup', () => { dragging = false; stage.classList.remove('dragging'); });
   stage.addEventListener('wheel', e => {
     e.preventDefault();
     const delta = -e.deltaY * 0.001;
@@ -562,7 +572,6 @@ function setupPanZoom() {
     scale = newScale;
     apply();
   }, { passive: false });
-
   function center() {
     const rect = stage.getBoundingClientRect();
     tx = (rect.width  - W) / 2;
@@ -580,30 +589,25 @@ function setStatus(msg) {
   document.getElementById('status').textContent = msg || '';
   document.getElementById('loading-text').textContent = msg || 'Loading…';
 }
-function showLoading(show) {
-  document.getElementById('loading').classList.toggle('hidden', !show);
-}
-function showWelcome(show) {
-  document.getElementById('welcome').classList.toggle('hidden', !show);
-}
+function showLoading(show) { document.getElementById('loading').classList.toggle('hidden', !show); }
+function showWelcome(show) { document.getElementById('welcome').classList.toggle('hidden', !show); }
 
 // ============================================================
 // MAIN
 // ============================================================
-let currentArtist = null;
+let mapState = null;
 
 async function run(seed) {
-  if (!seed || !seed.trim()) {
-    showWelcome(true);
-    return;
-  }
+  if (!seed || !seed.trim()) { showWelcome(true); return; }
   const btn = document.getElementById('go');
   btn.disabled = true;
   showWelcome(false);
   showLoading(true);
-  currentArtist = seed;
   document.getElementById('seed').value = seed;
   document.title = `Music Map — ${seed}`;
+  // Clear overlay
+  const ov = document.getElementById('overlay');
+  ov.getContext('2d').clearRect(0, 0, ov.width, ov.height);
 
   try {
     const { names, Aid, Pop } = await loadMap(seed);
@@ -620,14 +624,17 @@ async function run(seed) {
 
     const canvas = document.getElementById('field');
     canvas.width = W; canvas.height = H;
+    ov.width = W; ov.height = H;
     const ctx = canvas.getContext('2d');
     setStatus('Painting regions…');
     await new Promise(r => setTimeout(r, 30));
-    paintField(ctx, pos, rgbs, W, H);
+    const maskData = paintField(ctx, pos, rgbs, communities, W, H);
+
+    mapState = { names, pos, communities, palette, maskData };
 
     renderLabels(names, pos, communities, palette, Pop);
     renderLegend(communities, palette, names);
-    setStatus(`${names.length} artists, ${new Set(communities).size} clusters`);
+    setStatus(`${names.length} artists, ${new Set(communities).size} clusters — fetching genres…`);
   } catch (err) {
     console.error(err);
     setStatus('⚠️ ' + err.message);
@@ -640,48 +647,33 @@ async function run(seed) {
 
 function navigate(artist) {
   const hash = encodeURIComponent(artist.trim());
-  if (decodeURIComponent(location.hash.slice(1)) === artist.trim()) {
-    run(artist);   // same hash — just rerun
-  } else {
-    location.hash = hash;  // triggers hashchange → run
-  }
+  if (decodeURIComponent(location.hash.slice(1)) === artist.trim()) run(artist);
+  else location.hash = hash;
 }
-
 function readHash() {
   const h = decodeURIComponent(location.hash.slice(1)).trim();
   return h || null;
 }
 
-// Event bindings
 document.getElementById('go').addEventListener('click', () => {
   const val = document.getElementById('seed').value.trim();
   if (val) navigate(val);
 });
 document.getElementById('seed').addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    const val = e.target.value.trim();
-    if (val) navigate(val);
-  }
+  if (e.key === 'Enter') { const val = e.target.value.trim(); if (val) navigate(val); }
 });
 document.querySelectorAll('#welcome .examples button').forEach(btn => {
   btn.addEventListener('click', () => navigate(btn.dataset.artist));
 });
 window.addEventListener('hashchange', () => {
   const a = readHash();
-  if (a) run(a);
-  else { showWelcome(true); currentArtist = null; }
+  if (a) run(a); else { showWelcome(true); mapState = null; }
 });
 
 setupPanZoom();
-
-// Boot — only load if URL has #artist, otherwise show welcome
 const initial = readHash();
-if (initial) {
-  run(initial);
-} else {
-  showWelcome(true);
-  document.getElementById('seed').focus();
-}
+if (initial) run(initial);
+else { showWelcome(true); document.getElementById('seed').focus(); }
 </script>
 
 </body>
