@@ -634,7 +634,7 @@ async function run(seed) {
 
     renderLabels(names, pos, communities, palette, Pop);
     renderLegend(communities, palette, names);
-    setStatus(`${names.length} artists, ${new Set(communities).size} clusters — fetching genres…`);
+    setStatus(``);
   } catch (err) {
     console.error(err);
     setStatus('⚠️ ' + err.message);
